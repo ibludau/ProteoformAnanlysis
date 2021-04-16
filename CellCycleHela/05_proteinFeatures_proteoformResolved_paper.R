@@ -31,9 +31,9 @@ summarizeFeatures(filteredDataProteoformResolved, PDF=T, name="filteredDataProte
 
 ##############
 
-proteins_proteoforms_025 <- fread("ProteinTables/proteoforms_score_0.25.txt", header = FALSE, col.names = 'ID')
+proteins_proteoforms_score01_qval01 <- fread("ProteinTables/proteoforms_score_0.1qval_0.1.txt", header = FALSE, col.names = 'ID')
 
-filteredDataProteoformResolved_proteoforms <- subset(filteredDataProteoformResolved, protein_id %in% proteins_proteoforms_025$ID)
+filteredDataProteoformResolved_proteoforms <- subset(filteredDataProteoformResolved, protein_id %in% proteins_proteoforms_score01_qval01$ID)
 
 length(unique(filteredDataProteoformResolved_proteoforms$protein_id))
 
@@ -42,7 +42,7 @@ filteredDataProteoformResolved_proteoforms[,n_unique_proteoforms := length(uniqu
 non_SEC_proteoforms <- unique(filteredDataProteoformResolved_proteoforms[n_unique_proteoforms==1]$protein_id)
 assembly_specific_proteoforms <- unique(filteredDataProteoformResolved_proteoforms[n_unique_proteoforms>1]$protein_id)
 
-write.table(assembly_specific_proteoforms,paste0("ProteinTables/assembly_specific_proteoforms_score_0.25.txt"), sep="\t", quote = F, col.names = F, row.names = F)
+write.table(assembly_specific_proteoforms,paste0("ProteinTables/assembly_specific_proteoforms_score_0.1qval_0.1.txt"), sep="\t", quote = F, col.names = F, row.names = F)
 
 source('../CCprofilerAnalysis/thesis/traces_plotting.R')
 

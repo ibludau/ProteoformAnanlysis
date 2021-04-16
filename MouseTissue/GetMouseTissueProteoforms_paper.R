@@ -92,30 +92,20 @@ traces_clusteredInN <- cutClustersInNreal(traces_clustered,
 traces_scored <- calculateProteoformScore(traces_clusteredInN)
 
 traces_scored$trace_annotation[, proteoform_score := ifelse(is.na(proteoform_score), 0, proteoform_score)]
+traces_scored$trace_annotation[, proteoform_score_pval_adj := ifelse(is.na(proteoform_score_pval_adj), 1, proteoform_score_pval_adj)]
 
-#' ## Visualize proteoform score distribution
-scores <- unique(traces_scored$trace_annotation[,.(proteoform_score), by=.(protein_id)])
+plotProteoformPvalHist(traces_scored, name="traces_scored_pval_hist", PDF=T)
 
-pdf('proteoform_score_dist.pdf', width=5, height=4.5)
-p <- ggplot(scores, aes(x=proteoform_score)) + 
-  geom_histogram(stat = "bin", binwidth=0.05, position='identity', alpha=0.3, color="#999999", fill="#999999") +
-  #scale_y_continuous(limits = c(0, 250), expand = c(0.04, 0.04)) +
-  xlab('score') +
-  theme_classic() +
-  theme(legend.position = c(0.8, 0.8))
-print(p)
-p <- ggplot(scores, aes(x=proteoform_score)) + 
-  geom_histogram(stat = "bin", binwidth=0.05, position='identity', alpha=0.3, color="#999999", fill="#999999") +
-  ylim(0,350) +
-  xlab('score') +
-  theme_classic() +
-  theme(legend.position = c(0.8, 0.8))
-print(p)
-dev.off()
+plotProteoformVolcano(traces_scored, name="traces_scored_volcano", PDF=T)
+
+source("../CCprofilerAnalysis/thesis/PaperAnalysis/CellCycleHela/plotProteoformVolcanoLines.R")
+plotProteoformVolcanoLines(traces_scored, name="traces_scored_volcano", score_cutoff = 0.1, adj_pval_cutoff = 0.1, PDF=T)
 
 #' ## Proteoform annotation
+#traces_proteoforms <- annotateTracesWithProteoforms(
+#  traces_scored, score_cutoff = 0)
 traces_proteoforms <- annotateTracesWithProteoforms(
-  traces_scored, score_cutoff = 0)
+  traces_scored, score_cutoff = 0, adj_pval_cutoff =  1)
 
 #' ## Evaluate sequence location of the determined proteoforms
 traces_location <- evaluateProteoformLocation(
@@ -124,87 +114,6 @@ traces_location <- evaluateProteoformLocation(
 #' ## Save traces 
 saveRDS(traces_location,"traces_location.rds")
 
-# @ToDo write tables with proteins for enrichment analysis
-getProteoformStats <- function(traces, score_threshold, localization_threshold=0.05){
-  tab <- traces$trace_annotation
-  
-  proteins <- unique(tab$protein_id)
-  n_proteins <- length(proteins)
-  write.table(proteins,"ProteinTables/proteins_total.txt", sep="\t", quote = F, col.names = F, row.names = F)
-  
-  tab_sub <- subset(tab, proteoform_score>=score_threshold)
-  
-  proteins_proteoforms <- unique(tab_sub$protein_id)
-  n_proteins_proteoforms <- length(proteins_proteoforms)
-  write.table(proteins_proteoforms,paste0("ProteinTables/proteoforms_score_",score_threshold,".txt"), sep="\t", quote = F, col.names = F, row.names = F)
-  
-  proteins_notExtreme <- unique(tab_sub[(genomLocation_pval_lim_min > localization_threshold) & (genomLocation_pval_min > localization_threshold)]$protein_id)
-  proteins_extreme <- unique(tab_sub[(genomLocation_pval_lim_min <= localization_threshold) | (genomLocation_pval_min <= localization_threshold)]$protein_id)
-  proteins_moreExtreme <- unique(tab_sub[(genomLocation_pval_lim_min <= localization_threshold) & (genomLocation_pval_min > localization_threshold)]$protein_id)
-  proteins_equallyExtreme <- unique(tab_sub[(genomLocation_pval_min <= localization_threshold)]$protein_id)
-
-  n_proteins_notExtreme <- length(proteins_notExtreme)
-  n_proteins_extreme <- length(proteins_extreme)
-  n_proteins_moreExtreme <- length(proteins_moreExtreme)
-  n_proteins_equallyExtreme <- length(proteins_equallyExtreme)
-
-  dt <- data.table(score_threshold = score_threshold,
-                   localization_threshold = localization_threshold,
-                   n_proteins=n_proteins,
-                   n_proteins_proteoforms=n_proteins_proteoforms,
-                   p_proteins_proteoforms=n_proteins_proteoforms/n_proteins,
-                   n_proteins_notExtreme=n_proteins_notExtreme,
-                   p_proteins_notExtreme=n_proteins_notExtreme/n_proteins_proteoforms,
-                   n_proteins_extreme=n_proteins_extreme,
-                   p_proteins_extreme=n_proteins_extreme/n_proteins_proteoforms,
-                   n_proteins_moreExtreme=n_proteins_moreExtreme,
-                   p_proteins_moreExtreme=n_proteins_moreExtreme/n_proteins_proteoforms,
-                   n_proteins_equallyExtreme=n_proteins_equallyExtreme,
-                   p_proteins_equallyExtreme=n_proteins_equallyExtreme/n_proteins_proteoforms)
-  return(dt)
-}
- 
-
-res <- data.table()
-for (i in seq(0,1,0.05)) {
-  for (j in seq(0, 0.5, 0.05)){
-    res_i <- getProteoformStats(traces_location, score_threshold=i, localization_threshold=j)
-    res <- rbind(res, res_i)
-  }
-}
-
-protein_stats = subset(res, select=c("score_threshold", "localization_threshold", "n_proteins","n_proteins_proteoforms","n_proteins_extreme","n_proteins_equallyExtreme","n_proteins_moreExtreme"))
-
-knitr::kable(protein_stats)
-write.table(protein_stats, "protein_proteoform_stats.txt", 
-            quote=F, sep="\t", row.names = F, col.names = T)
-
-
-res[,'pval_threshold':=localization_threshold]
-protein_stats_plot = subset(res, select=c("score_threshold",
-                                          "pval_threshold",
-                                          "n_proteins_proteoforms","p_proteins_proteoforms",
-                                          "n_proteins_extreme","p_proteins_extreme"))
-protein_stats_plot <- melt(protein_stats_plot, id.vars = c('score_threshold','pval_threshold'))
-
-pdf("protein_proteoform_stats.pdf", width=8, height=6)
-ggplot(protein_stats_plot, aes(x=score_threshold,y=value, group=pval_threshold, color=factor(pval_threshold))) + 
-  geom_point() + 
-  geom_line() + 
-  facet_wrap(~ variable, scales='free', nrow=3) +
-  theme_classic() +
-  scale_color_discrete()
-dev.off()
-
-pdf("protein_proteoform_stats_percentProteoformIncrease.pdf", width=3.5, height=3)
-ggplot(protein_stats_plot[variable=="p_proteins_proteoforms"], aes(x=score_threshold,y=value, group=pval_threshold)) + 
-  geom_point() + 
-  geom_line() + 
-  #facet_wrap(~ variable, scales='free', nrow=3) +
-  ylab("fraction of proteins with proteoforms") +
-  theme_classic() +
-  scale_color_discrete()
-dev.off()
 
 #' ## Plot proteoform profile for an example protein
 plotPeptideCluster(
@@ -220,10 +129,10 @@ class(plotSub) <- 'traces'
 plot(plotSub, legend = T, colour_by = "proteoform_id")
 
 #' ## Plot all proteoform profiles
-sigProteins <- subset(traces_location$trace_annotation, proteoform_score>=0)
+sigProteins <- subset(traces_location$trace_annotation, (proteoform_score>0.1) & (proteoform_score_pval_adj<=0.1))
 sigProteins <- unique(sigProteins[order(proteoform_score, decreasing = T)]$protein_id)
 
-pdf("allProteoformClusters_score0.pdf",height=4, width=6)
+pdf("allProteoformClusters_score01_pval01.pdf",height=4, width=6)
 for (p in sigProteins){
   plotPeptideCluster(
     traces_location,p, closeGaps=T, PDF=F)
@@ -233,16 +142,17 @@ for (p in sigProteins){
   plotSub <- plotSub[c("traces","trace_type","trace_annotation","fraction_annotation")]
   class(plotSub) <- 'traces'
   plot(plotSub, legend = T,
-       name=paste0(p, "; score=", round(plotSub$trace_annotation$proteoform_score[1], digits = 3)),
+       name=paste0(p, "\n score=", round(plotSub$trace_annotation$proteoform_score[1], digits = 3),
+                   "\n adj.pval=", round(plotSub$trace_annotation$proteoform_score_pval_adj[1], digits = 3)),
        colour_by = "proteoform_id")
 }
 dev.off()
 
 ## Plot all proteoform profiles with high sequence proximity
-intCases <- subset(traces_location$trace_annotation, proteoform_score>=0 & genomLocation_pval_lim_min<=0.05)
+intCases <- subset(traces_location$trace_annotation, (proteoform_score>0.1) & (proteoform_score_pval_adj<=0.1) & genomLocation_pval_lim_min<=0.05)
 intCases <- unique(intCases[order(proteoform_score, decreasing = T)]$protein_id)
 
-pdf("allProteoformClusters_score0_pval_lim_min_005.pdf",height=4, width=6)
+pdf("allProteoformClusters_score01_pval01_pval_lim_min_005.pdf",height=4, width=6)
 for (p in intCases){
   plotPeptideCluster(
     traces_location, p, closeGaps=T, PDF=F)
@@ -252,8 +162,65 @@ for (p in intCases){
   plotSub <- plotSub[c("traces","trace_type","trace_annotation","fraction_annotation")]
   class(plotSub) <- 'traces'
   plot(plotSub, legend = T, 
-       name=paste0(p, "; score=", round(plotSub$trace_annotation$proteoform_score[1], digits = 3)),
+       name=paste0(p, "\n score=", round(plotSub$trace_annotation$proteoform_score[1], digits = 3),
+                   "\n adj.pval=", round(plotSub$trace_annotation$proteoform_score_pval_adj[1], digits = 3)),
        colour_by = "proteoform_id")
 }
 dev.off()
+
+
+# @ToDo write tables with proteins for enrichment analysis
+getProteoformStats <- function(traces, adj_pval_cutoff, localization_threshold=0.05){
+  tab <- traces$trace_annotation
+  
+  proteins <- unique(tab$protein_id)
+  n_proteins <- length(proteins)
+  write.table(proteins,"ProteinTables/proteins_total.txt", sep="\t", quote = F, col.names = F, row.names = F)
+  
+  tab_sub <- subset(tab, (proteoform_score_pval_adj<=adj_pval_cutoff) & (proteoform_score >= 0.1))
+  
+  proteins_proteoforms <- unique(tab_sub$protein_id)
+  n_proteins_proteoforms <- length(proteins_proteoforms)
+  write.table(proteins_proteoforms,paste0("ProteinTables/proteoforms_adj_pval_cutoff_",adj_pval_cutoff,".txt"), sep="\t", quote = F, col.names = F, row.names = F)
+  
+  proteins_notExtreme <- unique(tab_sub[(genomLocation_pval_lim_min > localization_threshold) & (genomLocation_pval_min > localization_threshold)]$protein_id)
+  proteins_extreme <- unique(tab_sub[(genomLocation_pval_lim_min <= localization_threshold) | (genomLocation_pval_min <= localization_threshold)]$protein_id)
+  proteins_moreExtreme <- unique(tab_sub[(genomLocation_pval_lim_min <= localization_threshold) & (genomLocation_pval_min > localization_threshold)]$protein_id)
+  proteins_equallyExtreme <- unique(tab_sub[(genomLocation_pval_min <= localization_threshold)]$protein_id)
+  
+  n_proteins_notExtreme <- length(proteins_notExtreme)
+  n_proteins_extreme <- length(proteins_extreme)
+  n_proteins_moreExtreme <- length(proteins_moreExtreme)
+  n_proteins_equallyExtreme <- length(proteins_equallyExtreme)
+  
+  dt <- data.table(adj_pval_cutoff = adj_pval_cutoff,
+                   localization_threshold = localization_threshold,
+                   n_proteins=n_proteins,
+                   n_proteins_proteoforms=n_proteins_proteoforms,
+                   p_proteins_proteoforms=n_proteins_proteoforms/n_proteins,
+                   n_proteins_notExtreme=n_proteins_notExtreme,
+                   p_proteins_notExtreme=n_proteins_notExtreme/n_proteins_proteoforms,
+                   n_proteins_extreme=n_proteins_extreme,
+                   p_proteins_extreme=n_proteins_extreme/n_proteins_proteoforms,
+                   n_proteins_moreExtreme=n_proteins_moreExtreme,
+                   p_proteins_moreExtreme=n_proteins_moreExtreme/n_proteins_proteoforms,
+                   n_proteins_equallyExtreme=n_proteins_equallyExtreme,
+                   p_proteins_equallyExtreme=n_proteins_equallyExtreme/n_proteins_proteoforms)
+  return(dt)
+}
+
+
+res <- data.table()
+for (i in seq(0,1,0.05)) {
+  for (j in seq(0, 0.5, 0.05)){
+    res_i <- getProteoformStats(traces_location, adj_pval_cutoff=i, localization_threshold=j)
+    res <- rbind(res, res_i)
+  }
+}
+
+protein_stats = subset(res, select=c("adj_pval_cutoff", "localization_threshold", "n_proteins","n_proteins_proteoforms","n_proteins_extreme","n_proteins_equallyExtreme","n_proteins_moreExtreme"))
+
+knitr::kable(protein_stats)
+write.table(protein_stats, "protein_proteoform_stats.txt", 
+            quote=F, sep="\t", row.names = F, col.names = T)
 

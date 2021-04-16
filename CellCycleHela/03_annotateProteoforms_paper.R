@@ -37,30 +37,19 @@ traces_clusteredInN <- cutClustersInNreal(traces_clustered,
 traces_scored <- calculateProteoformScore(traces_clusteredInN)
 
 traces_scored$trace_annotation[, proteoform_score := ifelse(is.na(proteoform_score), 0, proteoform_score)]
+traces_scored$trace_annotation[, proteoform_score_pval_adj := ifelse(is.na(proteoform_score_pval_adj), 1, proteoform_score_pval_adj)]
 
-#' ## Visualize proteoform score distribution
-scores <- unique(traces_scored$trace_annotation[,.(proteoform_score), by=.(protein_id)])
+plotProteoformPvalHist(traces_scored, name="traces_scored_pval_hist", PDF=T)
 
-pdf('proteoform_score_dist.pdf', width=5, height=4.5)
-p <- ggplot(scores, aes(x=proteoform_score)) + 
-  geom_histogram(stat = "bin", binwidth=0.05, position='identity', alpha=0.3, color="#999999", fill="#999999") +
-  xlab('score') +
-  theme_classic() +
-  theme(legend.position = c(0.8, 0.8))
-print(p)
-p <- ggplot(scores, aes(x=proteoform_score)) + 
-  geom_histogram(stat = "bin", binwidth=0.05, position='identity', alpha=0.3, color="#999999", fill="#999999") +
-  ylim(0,900) +
-  xlab('score') +
-  theme_classic() +
-  theme(legend.position = c(0.8, 0.8))
-print(p)
-dev.off()
+plotProteoformVolcano(traces_scored, name="traces_scored_volcano", PDF=T)
+
+source("../CCprofilerAnalysis/thesis/PaperAnalysis/CellCycleHela/plotProteoformVolcanoLines.R")
+plotProteoformVolcanoLines(traces_scored, name="traces_scored_volcano_lines", score_cutoff = 0.1, adj_pval_cutoff = 0.1, PDF=T)
 
 #' ## Annotate traces with proteoform_ids. 
 # Selected zero cutoff for downstream evaluation.
 traces_proteoforms <- annotateTracesWithProteoforms(
-  traces_scored, score_cutoff = 0)
+  traces_scored, score_cutoff = 0, adj_pval_cutoff =  1)
 
 #' ## Evaluate sequence location of the determined proteoforms
 traces_location <- evaluateProteoformLocation(
@@ -177,7 +166,7 @@ proteoform_annotation[,phophoSite := getPhosphositeSite(protein_id,
 
 
 ### Fisher's exact test on regulated phosphosites
-proteoform_annotation_proteinInfo <- unique(subset(proteoform_annotation, select=c("protein_id","proteoform_score","phophoProtein","n_proteoforms")))
+proteoform_annotation_proteinInfo <- unique(subset(proteoform_annotation, select=c("protein_id","proteoform_score","proteoform_score_pval_adj","phophoProtein","n_proteoforms")))
 
 uniprot_annotation <- fread("/Users/isabell/Desktop/projects/ProteoformProject/InputData/uniprotSequenceAnnotation_humanSwissprot_130820.tab", quote = FALSE)
 uniprot_annotation <- subset(uniprot_annotation, select=c('Entry','Alternative products (isoforms)'))
@@ -189,28 +178,32 @@ proteoform_annotation_proteinInfo <- merge(proteoform_annotation_proteinInfo, un
 
 fisher_res <- data.table()
 for (i in seq(0,1,0.05)){
-  proteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==1) & (proteoform_score >= i)])
-  proteoform_noP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==0) & (proteoform_score >= i)])
-  noProteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==1) & ((proteoform_score < i) | is.na(proteoform_score))])
-  noProteoform_noP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==0) & ((proteoform_score < i) | is.na(proteoform_score))])
-  #noProteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==1) & ((proteoform_score < i) )])
-  #noProteoform_noP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==0) & ((proteoform_score < i) )])
-  
-  contingencyTable <- matrix(c(proteoform_sigP, noProteoform_sigP, proteoform_noP, noProteoform_noP),
-                             nrow = 2)
-  
-  fisherProteoformPhosphoEnrichment = fisher.test(contingencyTable, alternative = "greater")
-  fisherProteoformPhosphoEnrichment = data.table(score_threshold=i,
-                                                 test='fisherProteoformPhosphoEnrichment', 
-                                                 pvalue=fisherProteoformPhosphoEnrichment$p.value,
-                                                 odds=round(fisherProteoformPhosphoEnrichment$estimate, digits = 3))
-  
-  fisher_res <- rbind(fisher_res, fisherProteoformPhosphoEnrichment)
+  for (j in seq(0,1,0.05)){
+    proteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==1) & (proteoform_score >= i) & (proteoform_score_pval_adj <= i)])
+    proteoform_noP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==0) & (proteoform_score >= i) & (proteoform_score_pval_adj <= i)])
+    noProteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==1) & ((proteoform_score < i) | (proteoform_score_pval_adj <= j))])
+    noProteoform_noP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==0) & ((proteoform_score < i) | (proteoform_score_pval_adj <= j))])
+    #noProteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==1) & ((proteoform_score < i) )])
+    #noProteoform_noP <- nrow(proteoform_annotation_proteinInfo[(phophoProtein==0) & ((proteoform_score < i) )])
+    
+    contingencyTable <- matrix(c(proteoform_sigP, noProteoform_sigP, proteoform_noP, noProteoform_noP),
+                               nrow = 2)
+    
+    fisherProteoformPhosphoEnrichment = fisher.test(contingencyTable, alternative = "greater")
+    fisherProteoformPhosphoEnrichment = data.table(score_threshold=i,
+                                                   qval_threshold=j,
+                                                   test='fisherProteoformPhosphoEnrichment', 
+                                                   pvalue=fisherProteoformPhosphoEnrichment$p.value,
+                                                   odds=round(fisherProteoformPhosphoEnrichment$estimate, digits = 3))
+    
+    fisher_res <- rbind(fisher_res, fisherProteoformPhosphoEnrichment)
+  }
 }
 
 pdf("fisherProteoformPhosphoEnrichment.pdf", width=4, height=3)
-ggplot(fisher_res, aes(x=score_threshold, y=odds, color=-log10(pvalue))) + 
+ggplot(fisher_res, aes(x=score_threshold, y=odds, color=-log10(pvalue), group=qval_threshold)) + 
   geom_point() + 
+  geom_line() + 
   theme_classic() + 
   ylim(0,8)+
   #ggtitle('fisherProteoformPhosphoEnrichment') +
@@ -223,26 +216,30 @@ write.table(fisher_res, "fisherProteoformPhosphoEnrichment.txt", quote=F, sep="\
 
 fisher_res <- data.table()
 for (i in seq(0,1,0.05)){
-  proteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(has_isoforms==1) & (proteoform_score >= i)])
-  proteoform_noP <- nrow(proteoform_annotation_proteinInfo[(has_isoforms==0) & (proteoform_score >= i)])
-  noProteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(has_isoforms==1) & ((proteoform_score < i) | is.na(proteoform_score))])
-  noProteoform_noP <- nrow(proteoform_annotation_proteinInfo[(has_isoforms==0) & ((proteoform_score < i) | is.na(proteoform_score))])
-  
-  contingencyTable <- matrix(c(proteoform_sigP, noProteoform_sigP, proteoform_noP, noProteoform_noP),
-                             nrow = 2)
-  
-  fisherProteoformIsoformEnrichment = fisher.test(contingencyTable, alternative = "greater")
-  fisherProteoformIsoformEnrichment = data.table(score_threshold=i,
-                                                 test='fisherProteoformIsoformEnrichment', 
-                                                 pvalue=fisherProteoformIsoformEnrichment$p.value,
-                                                 odds=round(fisherProteoformIsoformEnrichment$estimate, digits = 3))
-  
-  fisher_res <- rbind(fisher_res, fisherProteoformIsoformEnrichment)
+  for (j in seq(0,1,0.05)){
+    proteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(has_isoforms==1) & (proteoform_score >= i) & (proteoform_score_pval_adj <= j)])
+    proteoform_noP <- nrow(proteoform_annotation_proteinInfo[(has_isoforms==0) & (proteoform_score >= i) & (proteoform_score_pval_adj <= j)])
+    noProteoform_sigP <- nrow(proteoform_annotation_proteinInfo[(has_isoforms==1) & ((proteoform_score < i) | (proteoform_score_pval_adj <= j))])
+    noProteoform_noP <- nrow(proteoform_annotation_proteinInfo[(has_isoforms==0) & ((proteoform_score < i) | (proteoform_score_pval_adj <= j))])
+    
+    contingencyTable <- matrix(c(proteoform_sigP, noProteoform_sigP, proteoform_noP, noProteoform_noP),
+                               nrow = 2)
+    
+    fisherProteoformIsoformEnrichment = fisher.test(contingencyTable, alternative = "greater")
+    fisherProteoformIsoformEnrichment = data.table(score_threshold=i,
+                                                   qval_threshold=j,
+                                                   test='fisherProteoformIsoformEnrichment', 
+                                                   pvalue=fisherProteoformIsoformEnrichment$p.value,
+                                                   odds=round(fisherProteoformIsoformEnrichment$estimate, digits = 3))
+    
+    fisher_res <- rbind(fisher_res, fisherProteoformIsoformEnrichment)
+  }
 }
 
 pdf("fisherProteoformIsoformEnrichment.pdf", width=4, height=3)
-ggplot(fisher_res, aes(x=score_threshold, y=odds, color=-log10(pvalue))) + 
+ggplot(fisher_res, aes(x=score_threshold, y=odds, color=-log10(pvalue),group=qval_threshold)) + 
   geom_point() + 
+  geom_line() + 
   theme_classic() + 
   ylim(0,8)+
   scale_color_gradient2(low='grey', midpoint=-log10(0.01), mid='blue',high='red', space = "rgb", guide = "colourbar") 
@@ -286,18 +283,19 @@ traces_location$trace_annotation[,phospho_fisher_pval_min := min(phospho_fisher_
 saveRDS(traces_location,"traces_location.rds")
 
 #' ## Extract global stats
-getProteoformStats <- function(traces, score_threshold, localization_threshold=0.05, phospho_threshold=0.2){
+#' ## Extract global stats
+getProteoformStats <- function(traces, score_threshold, qval_threshold, localization_threshold=0.05, phospho_threshold=0.2){
   tab <- traces$trace_annotation
   
   proteins <- unique(tab$protein_id)
   n_proteins <- length(proteins)
   write.table(proteins,"ProteinTables/proteins_total.txt", sep="\t", quote = F, col.names = F, row.names = F)
   
-  tab_sub <- subset(tab, proteoform_score>=score_threshold)
+  tab_sub <- subset(tab, (proteoform_score>=score_threshold) & (proteoform_score_pval_adj<=qval_threshold))
   
   proteins_proteoforms <- unique(tab_sub$protein_id)
   n_proteins_proteoforms <- length(proteins_proteoforms)
-  write.table(proteins_proteoforms,paste0("ProteinTables/proteoforms_score_",score_threshold,".txt"), sep="\t", quote = F, col.names = F, row.names = F)
+  write.table(proteins_proteoforms,paste0("ProteinTables/proteoforms_score_",score_threshold,"qval_",qval_threshold,".txt"), sep="\t", quote = F, col.names = F, row.names = F)
   
   proteins_notExtreme <- unique(tab_sub[(genomLocation_pval_lim_min > localization_threshold) & (genomLocation_pval_min > localization_threshold)]$protein_id)
   proteins_extreme <- unique(tab_sub[(genomLocation_pval_lim_min <= localization_threshold) | (genomLocation_pval_min <= localization_threshold)]$protein_id)
@@ -323,6 +321,7 @@ getProteoformStats <- function(traces, score_threshold, localization_threshold=0
   n_proteins_not_phospho_not_extreme <- length(proteins_not_phospho_not_extreme)
   
   dt <- data.table(score_threshold = score_threshold,
+                   qval_threshold = qval_threshold,
                    localization_threshold=localization_threshold,
                    phospho_threshold=phospho_threshold,
                    n_proteins=n_proteins,
@@ -348,14 +347,16 @@ getProteoformStats <- function(traces, score_threshold, localization_threshold=0
 
 
 res <- data.table()
-for (i in seq(0,1,0.05)) {
-  for (j in seq(0, 0.5, 0.05)){
-    res_i <- getProteoformStats(traces_location, score_threshold=i, localization_threshold=j, phospho_threshold=j)
-    res <- rbind(res, res_i)
+for (k in seq(0,1,0.05)){
+  for (i in seq(0,1,0.05)) {
+    for (j in seq(0, 0.5, 0.05)){
+      res_i <- getProteoformStats(traces_location, score_threshold=i, qval_threshold=k, localization_threshold=j, phospho_threshold=j)
+      res <- rbind(res, res_i)
+    }
   }
 }
 
-protein_stats = subset(res, select=c("score_threshold",
+protein_stats = subset(res, select=c("score_threshold", "qval_threshold",
                                      "localization_threshold", "phospho_threshold",
                                      "n_proteins",
                                      "n_proteins_proteoforms","n_proteins_extreme",
@@ -371,16 +372,16 @@ write.table(protein_stats, "protein_proteoform_stats.txt",
             quote=F, sep="\t", row.names = F, col.names = T)
 
 res[,'pval_threshold':=localization_threshold]
-protein_stats_plot = subset(res, select=c("score_threshold",
-                                     "pval_threshold",
-                                     "n_proteins_proteoforms","p_proteins_proteoforms",
-                                     "n_proteins_extreme","p_proteins_extreme",
-                                     "n_proteins_proteoformPhosphoEnriched",
-                                     "p_proteins_proteoformPhosphoEnriched"))
-protein_stats_plot <- melt(protein_stats_plot, id.vars = c('score_threshold','pval_threshold'))
+protein_stats_plot = subset(res, select=c("score_threshold", "qval_threshold",
+                                          "pval_threshold",
+                                          "n_proteins_proteoforms","p_proteins_proteoforms",
+                                          "n_proteins_extreme","p_proteins_extreme",
+                                          "n_proteins_proteoformPhosphoEnriched",
+                                          "p_proteins_proteoformPhosphoEnriched"))
+protein_stats_plot <- melt(protein_stats_plot, id.vars = c('score_threshold','qval_threshold','pval_threshold'))
 
-pdf("protein_proteoform_stats.pdf", width=8, height=6)
-ggplot(protein_stats_plot, aes(x=score_threshold,y=value, group=pval_threshold, color=factor(pval_threshold))) + 
+pdf("protein_proteoform_stats_qval01.pdf", width=8, height=6)
+ggplot(protein_stats_plot[qval_threshold==0.1], aes(x=score_threshold,y=value, group=pval_threshold, color=factor(pval_threshold))) + 
   geom_point() + 
   geom_line() + 
   facet_wrap(~ variable, scales='free', nrow=3) +
@@ -388,8 +389,40 @@ ggplot(protein_stats_plot, aes(x=score_threshold,y=value, group=pval_threshold, 
   scale_color_discrete()
 dev.off()
 
-pdf("protein_proteoform_stats_percentProteoformIncrease.pdf", width=3.5, height=3)
-ggplot(protein_stats_plot[variable=="p_proteins_proteoforms"], aes(x=score_threshold,y=value, group=pval_threshold)) + 
+pdf("protein_proteoform_stats_score01.pdf", width=8, height=6)
+ggplot(protein_stats_plot[score_threshold==0.1], aes(x=qval_threshold,y=value, group=pval_threshold, color=factor(pval_threshold))) + 
+  geom_point() + 
+  geom_line() + 
+  facet_wrap(~ variable, scales='free', nrow=3) +
+  theme_classic() +
+  scale_color_discrete()
+dev.off()
+
+
+pdf("protein_proteoform_stats_percentProteoformIncrease_qval01.pdf", width=5, height=3)
+ggplot(protein_stats_plot[variable=="p_proteins_proteoforms"], 
+       aes(x=score_threshold,y=value, group=qval_threshold, colour=qval_threshold)) + 
+  geom_point() + 
+  geom_line() + 
+  ylab("fraction of proteins with proteoforms") +
+  theme_classic() 
+ggplot(protein_stats_plot[qval_threshold==0.1][variable=="p_proteins_proteoforms"], aes(x=score_threshold,y=value, group=pval_threshold)) + 
+  geom_point() + 
+  geom_line() + 
+  #facet_wrap(~ variable, scales='free', nrow=3) +
+  ylab("fraction of proteins with proteoforms") +
+  theme_classic() +
+  scale_color_discrete()
+dev.off()
+
+pdf("protein_proteoform_stats_percentProteoformIncrease_score01.pdf", width=5, height=3)
+ggplot(protein_stats_plot[variable=="p_proteins_proteoforms"], 
+       aes(x=qval_threshold,y=value, group=score_threshold, colour=score_threshold)) + 
+  geom_point() + 
+  geom_line() + 
+  ylab("fraction of proteins with proteoforms") +
+  theme_classic() 
+ggplot(protein_stats_plot[score_threshold==0.1][variable=="p_proteins_proteoforms"], aes(x=qval_threshold,y=value, group=pval_threshold)) + 
   geom_point() + 
   geom_line() + 
   #facet_wrap(~ variable, scales='free', nrow=3) +
@@ -417,31 +450,31 @@ saveRDS(tracesList_location, "tracesList_location.rds")
 
 
 #' ## Plot all proteoform profiles
-sigProteins <- subset(traces_location$trace_annotation, proteoform_score>=0)
+sigProteins <- subset(traces_location$trace_annotation, (proteoform_score>=0.1) & (proteoform_score_pval_adj<=0.1))
 sigProteins <- unique(sigProteins[order(proteoform_score, decreasing = T)]$protein_id)
 
 source('../CCprofilerAnalysis/thesis/traces_plotting.R')
 
-pdf("allProteoformClusters_score0.pdf",height=4, width=6)
-for (p in sigProteins[1:10]){
+pdf("allProteoformClusters_score01_qval01.pdf",height=4, width=6)
+for (p in sigProteins){
   plotPeptideCluster(
     traces_location,p, closeGaps=T, PDF=F)
   plotSub <- subset(
     pepTracesList_filtered_sub_ann, trace_subset_ids = p, 
     trace_subset_type = "protein_id")
   plot.tracesList(plotSub, legend = T, aggregateReplicates=TRUE, 
-       design_matrix=design_matrix, error_bar=FALSE,
-       name=paste0(p, "; score=", round(plotSub$Interphase1$trace_annotation$proteoform_score[1], digits = 3)),
-       colour_by = "proteoform_id")
+                  design_matrix=design_matrix, error_bar=FALSE,
+                  name=paste0(p, "; score=", round(plotSub$Interphase1$trace_annotation$proteoform_score[1], digits = 3)),
+                  colour_by = "proteoform_id")
 }
 dev.off()
 
 ## Plot all proteoform profiles with high sequence proximity
-intCases <- subset(traces_location$trace_annotation, proteoform_score>=0 & genomLocation_pval_lim_min<=0.1)
+intCases <- subset(traces_location$trace_annotation, (proteoform_score>=0.1) & (proteoform_score_pval_adj<=0.1) & genomLocation_pval_lim_min<=0.1)
 intCases <- unique(intCases[order(proteoform_score, decreasing = T)]$protein_id)
 
-pdf("allProteoformClusters_score0_pval_lim_min_01.pdf",height=4, width=6)
-for (p in intCases[1:10]){
+pdf("allProteoformClusters_score01_qval01_pval_lim_min_01.pdf",height=4, width=6)
+for (p in intCases){
   plotPeptideCluster(
     traces_location, p, closeGaps=T, PDF=F)
   plotSub <- subset(
@@ -457,11 +490,11 @@ for (p in intCases[1:10]){
 dev.off()
 
 ## Plot all proteoform profiles with phosphoEnrichment
-intCases <- subset(traces_location$trace_annotation, proteoform_score>=0 & phospho_fisher_pval<=0.1)
+intCases <- subset(traces_location$trace_annotation, (proteoform_score>=0.1) & (proteoform_score_pval_adj<=0.1) & phospho_fisher_pval<=0.1)
 intCases <- unique(intCases[order(proteoform_score, decreasing = T)]$protein_id)
 
-pdf("allProteoformClusters_score0_phospho_fisher_pval_01.pdf",height=4, width=6)
-for (p in intCases[1:10]){
+pdf("allProteoformClusters_score01_qval01_phospho_fisher_pval_01.pdf",height=4, width=6)
+for (p in intCases){
   plotPeptideCluster(
     traces_location, p, closeGaps=T, PDF=F)
   plotSub <- subset(
@@ -478,7 +511,7 @@ dev.off()
 
 source("../CCprofilerAnalysis/thesis/proteoformClusterPhosphosite.R")
 library('ggpubr')
-pdf("allProteoformClusters_score0_phospho_fisher_pval_01_plot.pdf", width=5, height=3)
+pdf("allProteoformClusters_score01_qval01_phospho_fisher_pval_01_plot.pdf", width=5, height=3)
 for (p in intCases){
   plotPeptideClusterSigPhosphosites(traces_location, p, closeGaps = TRUE)
 }

@@ -2,10 +2,10 @@ setwd("/Users/isabell/Desktop/projects/ProteoformProject/Results/")
 library(data.table)
 library(ggplot2)
 
-# enrichment analysis of proteoforms at score threshold 0.25
-# https://david.ncifcrf.gov/ 13.08.2020
+# enrichment analysis of proteoforms at score01_qval01
+# https://david.ncifcrf.gov/ 01.03.2021
 
-dt_enrichment <- fread("ProteinTables/proteoform_vs_total_score_25.txt")
+dt_enrichment <- fread("ProteinTables/proteoform_vs_total_score01_qval01.txt")
 dt_enrichment <- subset(dt_enrichment, select=c("Category","Term","Count","PValue","Fold Enrichment"))
 setnames(dt_enrichment, "Fold Enrichment", "FoldEnrichment")
 
@@ -19,7 +19,7 @@ dt_enrichment <- dt_enrichment[order(rank(Count))]
 
 dt_enrichment$Term <- factor(dt_enrichment$Term, levels = dt_enrichment$Term)
 
-pdf("ProteoformEnrichmentPlot.pdf", width=8, height=3)
+pdf("ProteoformEnrichmentPlot.pdf", width=6, height=3.5)
 ggplot(dt_enrichment, aes(x=Term, y=Count, fill=FoldEnrichment)) + 
   geom_bar(stat='identity', alpha=0.8) +
   theme_classic() +

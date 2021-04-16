@@ -20,7 +20,7 @@ traces_location <- readRDS("traces_location.rds")
 
 #' ## Proteoform annotation
 traces_proteoforms <- annotateTracesWithProteoforms(
-  traces_location, score_cutoff = 0.4)
+  traces_location, score_cutoff = 0.1, adj_pval_cutoff = 0.1)
 
 removeOutlierPeptides <- function(traces){
   outlier_ids <- traces$trace_annotation[(n_proteoforms==2) & (cluster==100)]$id

@@ -3,21 +3,22 @@ library(data.table)
 library(ggplot2)
 
 # proteoforms at score threshold 0.25
-proteoforms_score25 <- fread("ProteinTables/proteoforms_score_0.25.txt", header = FALSE, col.names = 'ID')
-proteoforms <- proteoforms_score25$ID
+proteoforms_score01_qval01 <- fread("ProteinTables/proteoforms_score_0.1qval_0.1.txt", header = FALSE, col.names = 'ID')
+proteoforms <- proteoforms_score01_qval01$ID
 
 # proteoform stats
 proteoform_stats <- fread("protein_proteoform_stats.txt")
-proteoform_stats_score25 <- subset(proteoform_stats, score_threshold==0.25)
-proteoform_stats_score25_pval10 <- subset(proteoform_stats_score25, localization_threshold==0.10)
+#proteoform_stats_score01_qval01 <- subset(proteoform_stats, score_threshold==0.25)
+proteoform_stats_score01_qval01 <- subset(proteoform_stats, (score_threshold==0.1) & (qval_threshold==0.1))
+proteoform_stats_score01_qval01_pval10 <- subset(proteoform_stats_score01_qval01, localization_threshold==0.10)
 
 #########################
 # General proteoform pie
 #########################
 
 pie_dt <- data.table(id=c('proteoforms','qno proteofroms'), 
-                     n=c(proteoform_stats_score25_pval10$n_proteins_proteoforms,
-                         proteoform_stats_score25_pval10$n_proteins-proteoform_stats_score25_pval10$n_proteins_proteoforms))
+                     n=c(proteoform_stats_score01_qval01_pval10$n_proteins_proteoforms,
+                         proteoform_stats_score01_qval01_pval10$n_proteins-proteoform_stats_score01_qval01_pval10$n_proteins_proteoforms))
 
 pdf('pie_proteoforms_count.pdf', height=2, width=5)
 p <- ggplot(pie_dt, aes(x="", y=n, fill=id)) +
@@ -63,7 +64,7 @@ fisherEnrichment = data.table(test='fisherProteoformPhosphoEnrichment',
 print(fisherEnrichment)
 
 ####### Enrichment compared to full SEC dataset
-proteoforms_score0 <- fread("ProteinTables/proteoforms_score_0.txt", header = FALSE, col.names = 'ID')
+proteoforms_score0 <- fread("ProteinTables/proteoforms_score_0qval_1.txt", header = FALSE, col.names = 'ID')
 all_proteins <- proteoforms_score0$ID
 n_proteins_with_iso = length(which(all_proteins %in% uniprot_annotation_iso$Entry))
 n_proteins_without_iso = length(which(! all_proteins %in% uniprot_annotation_iso$Entry))
@@ -101,7 +102,7 @@ dev.off()
 
 #####
 
-proteoforms_score0 <- fread("ProteinTables/proteoforms_score_0.txt", header = FALSE, col.names = 'ID')
+proteoforms_score0 <- fread("ProteinTables/proteoforms_score_0qval_1.txt", header = FALSE, col.names = 'ID')
 
 proteoforms0 <- proteoforms_score0$ID
 
@@ -117,9 +118,9 @@ pie_dt <- data.table(uniprot=c('annotated isoforms','no annotated isoforms'), n=
 pie_dt <- data.table(stat=c('<=',
                                '<',
                                '>'), 
-                     n=c(proteoform_stats_score25_pval10$n_proteins_equallyExtreme,
-                         proteoform_stats_score25_pval10$n_proteins_moreExtreme,
-                         proteoform_stats_score25_pval10$n_proteins_proteoforms - proteoform_stats_score25_pval10$n_proteins_extreme))
+                     n=c(proteoform_stats_score01_qval01_pval10$n_proteins_equallyExtreme,
+                         proteoform_stats_score01_qval01_pval10$n_proteins_moreExtreme,
+                         proteoform_stats_score01_qval01_pval10$n_proteins_proteoforms - proteoform_stats_score01_qval01_pval10$n_proteins_extreme))
 
 pdf('pie_proteoforms_sequenceProximity.pdf', height=2, width=5)
 p <- ggplot(pie_dt, aes(x="", y=n, fill=stat)) +
@@ -145,10 +146,10 @@ pie_dt <- data.table(stat=c('phospho & extreme',
                             'extreme',
                             'phospho',
                             'none'), 
-                     n=c(proteoform_stats_score25_pval10$n_proteins_extreme_and_phospho,
-                         proteoform_stats_score25_pval10$n_proteins_extreme_not_phospho,
-                         proteoform_stats_score25_pval10$n_proteins_phospho_not_extreme,
-                         proteoform_stats_score25_pval10$n_proteins_not_phospho_not_extreme))
+                     n=c(proteoform_stats_score01_qval01_pval10$n_proteins_extreme_and_phospho,
+                         proteoform_stats_score01_qval01_pval10$n_proteins_extreme_not_phospho,
+                         proteoform_stats_score01_qval01_pval10$n_proteins_phospho_not_extreme,
+                         proteoform_stats_score01_qval01_pval10$n_proteins_not_phospho_not_extreme))
 
 pie_dt$stat <- factor(pie_dt$stat, level=c('phospho',
                                            'phospho & extreme',
@@ -174,13 +175,13 @@ dev.off()
 # Assembly specific pie
 #########################
 
-assembly_specific_proteoforms_score25 <- fread("ProteinTables/assembly_specific_proteoforms_score_0.25.txt", header = FALSE, col.names = 'ID')
-assembly_specific_proteoforms_score25 <- assembly_specific_proteoforms_score25$ID
+assembly_specific_proteoforms_score01_qval01 <- fread("ProteinTables/assembly_specific_proteoforms_score_0.1qval_0.1.txt", header = FALSE, col.names = 'ID')
+assembly_specific_proteoforms_score01_qval01 <- assembly_specific_proteoforms_score01_qval01$ID
 
 pie_dt <- data.table(stat=c('assembly specific',
                             'not assembly specific'), 
-                     n=c(length(assembly_specific_proteoforms_score25),
-                         proteoform_stats_score25_pval10$n_proteins_proteoforms-length(assembly_specific_proteoforms_score25)))
+                     n=c(length(assembly_specific_proteoforms_score01_qval01),
+                         proteoform_stats_score01_qval01_pval10$n_proteins_proteoforms-length(assembly_specific_proteoforms_score01_qval01)))
 
 pdf('pie_proteoforms_assembly_specific.pdf', height=2, width=5)
 p <- ggplot(pie_dt, aes(x="", y=n, fill=stat)) +
@@ -201,13 +202,13 @@ dev.off()
 # Cell Cycle regulated pie
 #########################
 
-cellcycle_regulated_proteoforms_score25 <- fread("ProteinTables/cellcycle_regulated_proteoforms_score_0.25.txt", header = FALSE, col.names = 'ID')
-cellcycle_regulated_proteoforms_score25 <- cellcycle_regulated_proteoforms_score25$ID
+cellcycle_regulated_proteoforms_score01_qval01 <- fread("ProteinTables/cellcycle_regulated_proteoforms__score01_qval01.txt", header = FALSE, col.names = 'ID')
+cellcycle_regulated_proteoforms_score01_qval01 <- cellcycle_regulated_proteoforms_score01_qval01$ID
 
 pie_dt <- data.table(stat=c('assembly specific',
                             'not assembly specific'), 
-                     n=c(length(cellcycle_regulated_proteoforms_score25),
-                         proteoform_stats_score25_pval10$n_proteins_proteoforms-length(cellcycle_regulated_proteoforms_score25)))
+                     n=c(length(cellcycle_regulated_proteoforms_score01_qval01),
+                         proteoform_stats_score01_qval01_pval10$n_proteins_proteoforms-length(cellcycle_regulated_proteoforms_score01_qval01)))
 
 pdf('pie_proteoforms_cellcycle_regulated.pdf', height=2, width=5)
 p <- ggplot(pie_dt, aes(x="", y=n, fill=stat)) +
@@ -228,19 +229,19 @@ dev.off()
 # Cell Cycle & assembly pie
 #########################
 
-cellcycle_and_assembly_proteoforms_score25 <- cellcycle_regulated_proteoforms_score25[cellcycle_regulated_proteoforms_score25 %in% assembly_specific_proteoforms_score25]
-cellcycle_not_assembly_proteoforms_score25 <- cellcycle_regulated_proteoforms_score25[! cellcycle_regulated_proteoforms_score25 %in% assembly_specific_proteoforms_score25]
-assembly_not_cellcycle_proteoforms_score25 <- assembly_specific_proteoforms_score25[! assembly_specific_proteoforms_score25 %in% cellcycle_regulated_proteoforms_score25]
-proteins_not_assembly_not_cellcycle <- proteoforms[! proteoforms %in% assembly_specific_proteoforms_score25]
-proteins_not_assembly_not_cellcycle <- proteins_not_assembly_not_cellcycle[! proteins_not_assembly_not_cellcycle %in% cellcycle_not_assembly_proteoforms_score25]
+cellcycle_and_assembly_proteoforms_score01_qval01 <- cellcycle_regulated_proteoforms_score01_qval01[cellcycle_regulated_proteoforms_score01_qval01 %in% assembly_specific_proteoforms_score01_qval01]
+cellcycle_not_assembly_proteoforms_score01_qval01 <- cellcycle_regulated_proteoforms_score01_qval01[! cellcycle_regulated_proteoforms_score01_qval01 %in% assembly_specific_proteoforms_score01_qval01]
+assembly_not_cellcycle_proteoforms_score01_qval01 <- assembly_specific_proteoforms_score01_qval01[! assembly_specific_proteoforms_score01_qval01 %in% cellcycle_regulated_proteoforms_score01_qval01]
+proteins_not_assembly_not_cellcycle <- proteoforms[! proteoforms %in% assembly_specific_proteoforms_score01_qval01]
+proteins_not_assembly_not_cellcycle <- proteins_not_assembly_not_cellcycle[! proteins_not_assembly_not_cellcycle %in% cellcycle_not_assembly_proteoforms_score01_qval01]
 
 pie_dt <- data.table(stat=c('cellcycle_and_assembly',
                             'cellcycle_not_assembly',
                             'assembly_not_cellcycle',
                             'not_assembly_not_cellcycle'), 
-                     n=c(length(cellcycle_and_assembly_proteoforms_score25),
-                         length(cellcycle_not_assembly_proteoforms_score25),
-                         length(assembly_not_cellcycle_proteoforms_score25),
+                     n=c(length(cellcycle_and_assembly_proteoforms_score01_qval01),
+                         length(cellcycle_not_assembly_proteoforms_score01_qval01),
+                         length(assembly_not_cellcycle_proteoforms_score01_qval01),
                          length(proteins_not_assembly_not_cellcycle)))
 
 pdf('pie_proteoforms_cellcycle_and_assembly.pdf', height=2, width=5)
@@ -263,23 +264,23 @@ dev.off()
 #########################
 traces_list_pepClusters <- readRDS("tracesList_location.rds")
 
-phospho_specific_proteoforms_score25 <- lapply(traces_list_pepClusters, function(x){unique(x$trace_annotation[(proteoform_score >= 0.25) & (phospho_fisher_pval <= 0.1)]$protein_id)})
-phospho_specific_proteoforms_score25 <- unlist(phospho_specific_proteoforms_score25)
-phospho_specific_proteoforms_score25 <- unique(phospho_specific_proteoforms_score25)
+phospho_specific_proteoforms_score01_qval01 <- lapply(traces_list_pepClusters, function(x){unique(x$trace_annotation[(proteoform_score >= 0.1) & (proteoform_score_pval_adj <= 0.1) & (phospho_fisher_pval <= 0.1)]$protein_id)})
+phospho_specific_proteoforms_score01_qval01 <- unlist(phospho_specific_proteoforms_score01_qval01)
+phospho_specific_proteoforms_score01_qval01 <- unique(phospho_specific_proteoforms_score01_qval01)
 
-cellcycle_and_phospho_proteoforms_score25 <- cellcycle_regulated_proteoforms_score25[cellcycle_regulated_proteoforms_score25 %in% phospho_specific_proteoforms_score25]
-cellcycle_not_phospho_proteoforms_score25 <- cellcycle_regulated_proteoforms_score25[! cellcycle_regulated_proteoforms_score25 %in% phospho_specific_proteoforms_score25]
-phospho_not_cellcycle_proteoforms_score25 <- phospho_specific_proteoforms_score25[! phospho_specific_proteoforms_score25 %in% cellcycle_regulated_proteoforms_score25]
-proteins_not_phospho_not_cellcycle <- proteoforms[! proteoforms %in% phospho_specific_proteoforms_score25]
-proteins_not_phospho_not_cellcycle <- proteins_not_phospho_not_cellcycle[! proteins_not_phospho_not_cellcycle %in% cellcycle_not_phospho_proteoforms_score25]
+cellcycle_and_phospho_proteoforms_score01_qval01 <- cellcycle_regulated_proteoforms_score01_qval01[cellcycle_regulated_proteoforms_score01_qval01 %in% phospho_specific_proteoforms_score01_qval01]
+cellcycle_not_phospho_proteoforms_score01_qval01 <- cellcycle_regulated_proteoforms_score01_qval01[! cellcycle_regulated_proteoforms_score01_qval01 %in% phospho_specific_proteoforms_score01_qval01]
+phospho_not_cellcycle_proteoforms_score01_qval01 <- phospho_specific_proteoforms_score01_qval01[! phospho_specific_proteoforms_score01_qval01 %in% cellcycle_regulated_proteoforms_score01_qval01]
+proteins_not_phospho_not_cellcycle <- proteoforms[! proteoforms %in% phospho_specific_proteoforms_score01_qval01]
+proteins_not_phospho_not_cellcycle <- proteins_not_phospho_not_cellcycle[! proteins_not_phospho_not_cellcycle %in% cellcycle_not_phospho_proteoforms_score01_qval01]
 
 pie_dt <- data.table(stat=c('cellcycle_and_phospho',
                             'cellcycle_not_phospho',
                             'phospho_not_cellcycle',
                             'not_phospho_not_cellcycle'), 
-                     n=c(length(cellcycle_and_phospho_proteoforms_score25),
-                         length(cellcycle_not_phospho_proteoforms_score25),
-                         length(phospho_not_cellcycle_proteoforms_score25),
+                     n=c(length(cellcycle_and_phospho_proteoforms_score01_qval01),
+                         length(cellcycle_not_phospho_proteoforms_score01_qval01),
+                         length(phospho_not_cellcycle_proteoforms_score01_qval01),
                          length(proteins_not_phospho_not_cellcycle)))
 
 pie_dt$stat <- factor(pie_dt$stat, level=c('phospho_not_cellcycle',
@@ -307,7 +308,7 @@ dev.off()
 ######
 ######
 
-source('../CCprofilerAnalysis/thesis/traces_plotting.R')
+source('../CCprofilerAnalysis/thesis/PaperAnalysis/CellCycleHela/traces_plotting.R')
 
 design_matrix <- readRDS("design_matrix.rda")
 

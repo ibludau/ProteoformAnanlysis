@@ -12,17 +12,19 @@ removeOutlierPeptides <- function(traces){
   return(sub_traces)
 }
 
-filterProteoformsByThreshold <- function(traces, score_threshold=0.5){
-  non_proteoform_proteins <- traces$trace_annotation[(n_proteoforms==2) & (proteoform_score<score_threshold)]$protein_id
+filterProteoformsByThreshold <- function(traces, score_threshold=0.5, adj_pval_cutoff=0.5){
+  non_proteoform_proteins_score <- traces$trace_annotation[(n_proteoforms==2) & (proteoform_score<score_threshold)]$protein_id
+  non_proteoform_proteins_qval <- traces$trace_annotation[(n_proteoforms==2) & (proteoform_score_pval_adj>adj_pval_cutoff)]$protein_id
+  non_proteoform_proteins <- unique(c(non_proteoform_proteins_score,non_proteoform_proteins_qval))
   traces$trace_annotation[,n_proteoforms := ifelse(protein_id %in% non_proteoform_proteins, 0, n_proteoforms)]
   traces$trace_annotation[,proteoform_id := ifelse(n_proteoforms == 0, protein_id, proteoform_id)]
   return(traces)
 }
 
-#' ## Re-annotate tarces based on the selected  score threshold of 0.25
+#' ## Re-annotate tarces based on the selected  score_threshold=0.1, adj_pval_cutoff=0.1
 traces_list_pepClusters <- lapply(tracesList_location, function(x){
   n <- removeOutlierPeptides(x)
-  m <- filterProteoformsByThreshold(n, score_threshold=0.25)
+  m <- filterProteoformsByThreshold(n, score_threshold=0.1, adj_pval_cutoff=0.1)
   return(m)
   })
 class(traces_list_pepClusters) <- "tracesList"

@@ -19,7 +19,7 @@ dt_enrichment <- dt_enrichment[order(rank(Count))]
 
 dt_enrichment$Term <- factor(dt_enrichment$Term, levels = dt_enrichment$Term)
 
-pdf("ProteoformEnrichmentPlot.pdf", width=7, height=3)
+pdf("ProteoformEnrichmentPlot.pdf", width=5, height=3)
 ggplot(dt_enrichment, aes(x=Term, y=Count, fill=FoldEnrichment)) + 
   geom_bar(stat='identity', alpha=0.8) +
   theme_classic() +

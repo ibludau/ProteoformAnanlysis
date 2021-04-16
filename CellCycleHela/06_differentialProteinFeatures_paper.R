@@ -75,17 +75,17 @@ length(unique(proteoform_DiffExprProteoform[(abs(medianLog2FC)>=1) & (pBHadj <= 
 
 #####
 
-proteins_proteoforms_025 <- fread("ProteinTables/proteoforms_score_0.25.txt", header = FALSE, col.names = 'ID')
+proteins_proteoforms_score01_qval01 <- fread("ProteinTables/proteoforms_score_0.1qval_0.1.txt", header = FALSE, col.names = 'ID')
 
-proteoform_DiffExprProteoform_proteoforms <- subset(proteoform_DiffExprProteoform, feature_id %in% proteins_proteoforms_025$ID)
+proteoform_DiffExprProteoform_proteoforms <- subset(proteoform_DiffExprProteoform, feature_id %in% proteins_proteoforms_score01_qval01$ID)
 proteoform_DiffExprProteoform_proteoforms_diff <- proteoform_DiffExprProteoform_proteoforms[(abs(medianLog2FC)>=1) & (pBHadj <= 0.05)]
 
 proteoform_proteins_diff <- unique(proteoform_DiffExprProteoform_proteoforms_diff$feature_id)
 length(proteoform_proteins_diff)
 
-write.table(proteoform_proteins_diff,paste0("ProteinTables/cellcycle_regulated_proteoforms_score_0.25.txt"), sep="\t", quote = F, col.names = F, row.names = F)
+write.table(proteoform_proteins_diff,paste0("ProteinTables/cellcycle_regulated_proteoforms__score01_qval01.txt"), sep="\t", quote = F, col.names = F, row.names = F)
 
-source('../CCprofilerAnalysis/thesis/PaperAnalysis/traces_plotting.R')
+source('../CCprofilerAnalysis/thesis/PaperAnalysis/CellCycleHela/traces_plotting.R')
 
 traces_list_pepClusters <- readRDS("tracesList_location.rds")
 
